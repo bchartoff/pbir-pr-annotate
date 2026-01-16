@@ -200,7 +200,7 @@
             "position": {
               "expr": {
                 "Literal": {
-                  "Value": "'Top'"
+                  "Value": "'LeftCenter'"
                 }
               }
             },

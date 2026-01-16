@@ -9,7 +9,7 @@
     "width": 478
   },
   "visual": {
-    "visualType": "donutChart",
+    "visualType": "pieChart",
     "query": {
       "queryState": {
         "Category": {
