@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
 import json
 import os
 import subprocess
+
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -48,10 +50,24 @@ def git_diff_stats(base_sha: str, head_sha: str) -> Dict[str, Tuple[int, int]]:
     return stats
 
 
-def file_url(repo: str, head_sha: str, path: str) -> str:
-    """GitHub blob URL for a file path, URL-encoded."""
-    safe = quote(path, safe="/")
-    return f"https://github.com/{repo}/blob/{head_sha}/{safe}"
+def diff_anchor_for_path(filepath: str) -> str:
+    """
+    Compute GitHub's diff anchor hash for the commit diff URL.
+    filepath must be repo-relative with forward slashes.
+    """
+    h = hashlib.sha256(filepath.encode("utf-8")).hexdigest()
+    return h
+
+def pr_diff_url(repo: str, pr_number: str, filepath: str, split: bool = True) -> str:
+    """
+    Full URL to file-level diff for this path in a given commit.
+    """
+    anchor = diff_anchor_for_path(filepath)
+    base = f"https://github.com/{repo}/pull/{pr_number}/files"
+    if split:
+        return f"{base}?diff=split#diff-{anchor}"
+    return f"{base}#diff-{anchor}"
+
 
 
 def workflow_url(repo: str, head_sha: str, workflow_file: str) -> str:
@@ -285,7 +301,7 @@ def main() -> None:
 
                 # Page def changed
                 if info["page_changed"] and info["page_path"]:
-                    purl = file_url(repo, head_sha, info["page_path"])
+                    purl = pr_diff_url(repo, pr_number, info["page_path"])
                     ins, dels = diff_stats.get(info["page_path"], (0, 0))
                     lines.append(
                         f"   - Page definition changed ([page.json]({purl})) _( +{ins}_ 🟩 _/ -{dels}_ 🟥 _)_"
@@ -303,7 +319,7 @@ def main() -> None:
 
                     vis_for_ascii: List[Tuple[int, Dict[str, Any]]] = []
                     for idx, (vpath, vis) in enumerate(vis_items, start=1):
-                        vurl = file_url(repo, head_sha, vpath)
+                        vurl = pr_diff_url(repo, pr_number, vpath)
                         label = visual_label(vis)
 
                         # insertion/deletion stats for this visual file
