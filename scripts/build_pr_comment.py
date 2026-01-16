@@ -317,7 +317,7 @@ def main() -> None:
                         # insertion/deletion stats for this visual file
                         ins, dels = diff_stats.get(vpath, (0, 0))
                         lines.append(
-                            f"   {idx}. [{label}]({vurl}) _( +{ins}_ 🟩 _/ -{dels}_ 🟥 _)_"
+                            f"   {idx}. <a href =\"{vurl}\" target=\"_blank\">{label}</a> _( +{ins}_ 🟩 _/ -{dels}_ 🟥 _)_"
                         )
 
                         vis_for_ascii.append((idx, vis))
