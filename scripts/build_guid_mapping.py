@@ -14,26 +14,54 @@ def read_json(path: Path) -> Optional[Dict[str, Any]]:
 
 def strip_literal_quotes(value: str) -> str:
     """
-    Power BI often stores Literal.Value strings like:
-      "'SALES AND MARKETING'"
-    We want to turn that into "SALES AND MARKETING".
+    Convert PBIR formatted strings of form
+    "'STRING TEXT'" to "STRING TEXT"
     """
-    v = value.strip()
-    if len(v) >= 2 and v[0] == "'" and v[-1] == "'":
-        v = v[1:-1].strip()
-    return v
+    string = value.strip()
+    if len(string) >= 2 and string[0] == "'" and string[-1] == "'":
+        string = string[1:-1].strip()
+    return string
 
 
-def extract_visual_type(vobj: Dict[str, Any]) -> str:
+def extract_visual_type(vobj: Dict[str, Any], visual_path: Path) -> str:
+    """
+    As per `visualContainer` schema:
+    - https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.2.0/schema.json
+    - One of either top level `visual` or `visualGroup` is required
+
+    As per `visual` schema: 
+    - https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualConfiguration/2.2.0/schema-embedded.json
+    - `visualType` is required
+
+    As per `visualGroupConfig` definition:
+    - https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.2.0/schema.json#definitions/VisualGroupConfig
+    - `displayName` is required
+    
+    """
     try:
-        return str(vobj["visual"]["visualType"])
+        visual = vobj.get("visual", {}).get("visualType")
+        if isinstance(vt, str) and vt.strip():
+            return vt.strip()
     except Exception:
-        return ""
+        pass
+
+    try:
+        visualGroup = vobj.get("visualGroup", {}).get("displayName")
+        if isinstance(vg, str) and vg.strip():
+            return vg.strip()
+    except Exception:
+        pass
+
+    raise ValueError(
+        f"Unable to determine visual type. "
+        f"Expected either visual.visualType or visualGroup.displayName. "
+        f"File: {visual_path}"
+    )
 
 
 def extract_title_text(vobj: Dict[str, Any]) -> Optional[str]:
     """
-    Look for:
+    Look for (non-required):
       visual.visualContainerObjects.title[0].properties.text.expr.Literal.Value
     """
     try:
@@ -41,35 +69,48 @@ def extract_title_text(vobj: Dict[str, Any]) -> Optional[str]:
         if not isinstance(title_arr, list) or not title_arr:
             return None
 
-        props = title_arr[0]["properties"]
-        literal = props["text"]["expr"]["Literal"]["Value"]
-        if not isinstance(literal, str):
+        title_properties = title_arr[0]["properties"]
+        title = title_properties["text"]["expr"]["Literal"]["Value"]
+        if not isinstance(title, str):
             return None
 
-        cleaned = strip_literal_quotes(literal).strip()
-        return cleaned or None
+        cleaned_title = strip_literal_quotes(title).strip()
+        return cleaned_title or None
     except Exception:
         return None
 
 
 def extract_xywh_from_position(vobj: Dict[str, Any]) -> Tuple[float, float, float, float]:
     """
-    You said position is always present; we'll still guard lightly.
+    As per `visualContainer` schema:
+    -  https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.2.0/schema.json
+    - `properties` is required
+
+    And as per properties schema:
+    - https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.2.0/schema.json#definitions/VisualContainerPosition
+    - x, y, height, and width are all required. Yay!
+
     """
-    pos = vobj.get("position", {}) or {}
-    x = float(pos.get("x", 0.0))
-    y = float(pos.get("y", 0.0))
-    w = float(pos.get("width", 1.0))
-    h = float(pos.get("height", 1.0))
-    return x, y, w, h
+    position  = vobj.get("position", {}) or {}
+    x         = float(position.get("x", 0.0))
+    y         = float(position.get("y", 0.0))
+    width     = float(position.get("width", 1.0))
+    height    = float(position.get("height", 1.0))
+    
+    return x, y, width, height
 
 
 def find_report_dirs(root: Path) -> List[Path]:
-    # e.g. Finance.Report
+    """
+    Recursively find all pbir .Report folders
+    """
     return sorted(p for p in root.rglob("*.Report") if p.is_dir())
 
 
-def infer_report_name(report_dir: Path) -> str:
+def get_report_name(report_dir: Path) -> str:
+    """
+    Extract report name from .Report folder
+    """
     name = report_dir.name
     if name.endswith(".Report"):
         return name[: -len(".Report")]
@@ -77,25 +118,17 @@ def infer_report_name(report_dir: Path) -> str:
 
 
 def under_bookmarks(path: Path) -> bool:
+    """
+    TO DO: skipping bookmarks for now bc ugh
+    """
     return any(part.lower() == "bookmarks" for part in path.parts)
 
 
 def collect_pages_for_report(report_dir: Path, root: Path) -> List[Dict[str, Any]]:
     """
-    For a given *.Report directory, match your structure:
-
-    Finance.Report/
-      definition/
-        bookmarks/...
-        pages/
-          <pageId>/
-            page.json
-            visuals/
-              <visualId>/
-                visual.json
-          ...
+    
     """
-    report_name = infer_report_name(report_dir)
+    report_name = get_report_name(report_dir)
     definition_dir = report_dir / "definition"
     pages_root = definition_dir / "pages"
 
@@ -111,9 +144,7 @@ def collect_pages_for_report(report_dir: Path, root: Path) -> List[Dict[str, Any
 
         pobj = read_json(page_json) or {}
 
-        # Page ID is the technical name (e.g. "ReportSection3949...")
         page_id = str(pobj.get("name") or page_dir.name)
-        # Friendly name from displayName, fall back to ID/dir
         page_name = str(pobj.get("displayName") or page_dir.name or page_id)
 
         page_entry: Dict[str, Any] = {
@@ -161,7 +192,7 @@ def collect_pages_for_report(report_dir: Path, root: Path) -> List[Dict[str, Any
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default=".", help="Repo root to scan")
-    ap.add_argument("--out", default="pbir-mapping.json", help="Output mapping JSON path")
+    ap.add_argument("--out", default="_build_artifacts/pbir-mapping.json", help="Output mapping JSON path")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
