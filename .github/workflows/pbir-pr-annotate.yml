@@ -1,0 +1,49 @@
+name: Annotate PBIR Pull Request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  annotate-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Generate PBIR mapping
+        run: |
+          python scripts/build_guid_mapping.py \
+            --root . \
+            --out guid-mapping.json
+
+      - name: Build Pull Request comment as markdown
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/build_pr_comment.py \
+            --mapping guid-mapping.json \
+            --out pr-comment.md
+
+      - name: Post or update PR comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python scripts/post_pr_comment.py \
+            --comment pr-comment.md \
+            --marker "<!-- pbir-layout-summary -->"
