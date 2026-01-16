@@ -40,15 +40,15 @@ def extract_visual_type(vobj: Dict[str, Any], visual_path: Path) -> str:
     """
     try:
         visual = vobj.get("visual", {}).get("visualType")
-        if isinstance(vt, str) and vt.strip():
-            return vt.strip()
+        if isinstance(visual, str) and visual.strip():
+            return visual.strip()
     except Exception:
         pass
 
     try:
         visualGroup = vobj.get("visualGroup", {}).get("displayName")
-        if isinstance(vg, str) and vg.strip():
-            return vg.strip()
+        if isinstance(visualGroup, str) and visualGroup.strip():
+            return visualGroup.strip()
     except Exception:
         pass
 
