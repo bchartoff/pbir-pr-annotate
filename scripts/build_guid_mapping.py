@@ -168,7 +168,7 @@ def collect_pages_for_report(report_dir: Path, root: Path) -> List[Dict[str, Any
                 vis_name = str(vobj.get("name") or visual_dir.name)
 
                 x, y, w, h = extract_xywh_from_position(vobj)
-                visual_type = extract_visual_type(vobj)
+                visual_type = extract_visual_type(vobj, visual_json)
                 title_text = extract_title_text(vobj)
 
                 vis_entry = {
