@@ -70,8 +70,9 @@ def main() -> None:
 
     if existing_id:
         print(f"Updating existing PR comment (id={existing_id})")
-        update_url = f"{comments_url}/{existing_id}"
+        update_url = f"https://api.github.com/repos/{repo}/issues/comments/{existing_id}"
         r = requests.patch(update_url, headers=headers, json={"body": final_body})
+
         if r.status_code not in (200, 201):
             die(f"Failed to update comment: {r.status_code} {r.text}")
     else:

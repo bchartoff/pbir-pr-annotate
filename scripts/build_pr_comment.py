@@ -58,17 +58,9 @@ def diff_anchor_for_path(filepath: str) -> str:
     h = hashlib.sha256(filepath.encode("utf-8")).hexdigest()
     return h
 
-def pr_diff_url(repo: str, pr_number: str, filepath: str, split: bool = True) -> str:
-    """
-    Full URL to file-level diff for this path in a given commit.
-    """
+def pr_diff_url(repo: str, pr_number: str, filepath: str) -> str:
     anchor = diff_anchor_for_path(filepath)
-    base = f"https://github.com/{repo}/pull/{pr_number}/files"
-    if split:
-        return f"{base}?diff=split#diff-{anchor}"
-    return f"{base}#diff-{anchor}"
-
-
+    return f"https://github.com/{repo}/pull/{pr_number}/files#diff-{anchor}"
 
 def workflow_url(repo: str, head_sha: str, workflow_file: str) -> str:
     """Direct link to workflow file under .github/workflows."""
@@ -264,6 +256,7 @@ def main() -> None:
     lines: List[str] = []
     lines.append(f"_List of pages & visuals changed in this PR (#{pr_number})_")
     lines.append("")
+    lines.append("_**Note**: GitHub drops #diff-… from urls on click; open links in a **new tab** to jump to given file._")
     lines.append("")
 
     if not per_page:
@@ -330,6 +323,8 @@ def main() -> None:
 
                         vis_for_ascii.append((idx, vis))
 
+                    lines.append("")
+                    lines.append("")
                     lines.append("")
                     lines.append("_Map of approximate visual size and location, for reference_")
                     lines.append("   ```text")
